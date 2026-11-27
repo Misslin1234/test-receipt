@@ -1,0 +1,7 @@
+{
+  "name": "mini",
+  "private": true,
+  "scripts": {
+    "test": "node check.js"
+  }
+}
