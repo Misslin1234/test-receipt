@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 - 2026-11-27
+
+- The tree fingerprint is taken after test commands finish. A command that writes an un-ignored file, such as coverage.txt, can still leave a fresh receipt. A later edit makes `check` stale.
+- `check` and the Stop hook fingerprint the whole git repository from its toplevel. A content edit under `--cwd`, and an edit outside that directory, both change the fingerprint. Any `.test-receipt/` directory is excluded.
+- `check` and the Stop hook find the nearest `.test-receipt/latest.json` by walking up from the working directory to the git toplevel. `run` still writes the receipt in the directory it runs in.
+- A pass claim is a sentence with a pass word and a test word and no negation or uncertainty. Paraphrases such as "everything passes" and "测试全绿" are caught. "Not all tests pass.", "No tests passed.", and "Tests failed with exit code 1." stay allowed.
+- `run` outside a git repository prints one warning that the receipt can never be fresh.
+- The published package includes CHANGELOG.md.
+
 ## 0.2.0 - 2026-11-27
 
 - Detect Bun, Deno, Maven, Gradle, .NET, Ruby, and PHPUnit from marker files in the project root. Existing npm, pnpm, yarn, pytest, Go, Cargo, and Make detection is unchanged.

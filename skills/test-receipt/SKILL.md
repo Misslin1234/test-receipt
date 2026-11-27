@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js 18+ and git on PATH. No network calls. The Stop hook is verified for Claude Code, Codex, and Qoder. Cursor claim checking is not yet supported."
 metadata:
   author: Misslin1234
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Test receipt
@@ -26,6 +26,8 @@ If you cannot find it, say that tests were not run. Do not claim they passed.
 
 Run it from the project root. Pass `--cwd` when the shell is somewhere else. Detection only looks at the root. Run `test-receipt detect` to see which command would run and why. That command does not run the tests and does not write a receipt.
 
+`run` writes `.test-receipt/latest.json` in the directory it runs in. `check` and the Stop hook walk up from the working directory to the git toplevel and use the nearest receipt. A receipt outside that repository does not count. The fingerprint covers the whole repository and is taken after the commands finish.
+
 ## Rules
 
 1. Before any success claim, run `test-receipt run` (or `node <cli> run`). Do not invent a test command when detection fails. Ask the user, or pass `--cmd` only for a command the user named.
@@ -41,7 +43,7 @@ English examples: "tests pass", "tests passed", "all 12 tests passed", "the test
 
 Chinese examples: "测试通过", "测试已通过", "全部测试通过", "单元测试通过", "测试成功", "测试都过了".
 
-The Stop hook only keyword-matches claims like these. Other wording can slip through. Follow this rule even when the hook stays silent. The hook also misses "tests failed" and "tests were not run"; those sentences are your job to keep true.
+The Stop hook treats a sentence as a pass claim when it has a pass word and a test word and no negation. Pass words include pass, passed, passing, green, succeed, 通过, and 全绿. Test words include test, suite, pytest, jest, vitest, cargo test, go test, checks, 测试, and 用例. "I couldn't confirm that the tests pass.", "Not all tests pass.", and "Tests failed with exit code 1." are not claims. Some wording can still slip through. Follow this rule even when the hook stays silent. The hook does not check that a failure sentence is true.
 
 ## What fresh means
 
