@@ -199,6 +199,9 @@ async function main(argv) {
       process.stderr.write("running: " + item.command + "\n");
     }
     const result = await execute(cwd, commands);
+    if (!result.git.inGit) {
+      process.stderr.write("warning: the receipt can never be fresh outside a git repository.\n");
+    }
     if (args.json) {
       process.stdout.write(JSON.stringify(result.receipt, null, 2) + "\n");
     } else {
