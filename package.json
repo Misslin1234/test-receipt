@@ -1,0 +1,27 @@
+{
+  "name": "test-receipt",
+  "version": "0.1.0",
+  "description": "Run a project's tests and write a local receipt so a coding agent cannot claim tests passed without a fresh exit code 0.",
+  "license": "MIT",
+  "author": "Misslin1234",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Misslin1234/test-receipt.git"
+  },
+  "bin": {
+    "test-receipt": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "skills",
+    "examples",
+    "script"
+  ]
+}
