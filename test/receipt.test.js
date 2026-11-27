@@ -111,6 +111,49 @@ test("outputTail keeps the end of long output", async () => {
   assert.ok(result.receipt.commands[0].outputTail.length <= TAIL_LIMIT);
 });
 
+test("a subdirectory run hashes the whole repo, so content edits go stale", async () => {
+  const dir = tempDir();
+  initRepo(dir);
+  writeFile(dir, "pkg/a/package.json", "{\"name\":\"a\"}\n");
+  writeFile(dir, "pkg/a/f.js", "module.exports = 1;\n");
+  writeFile(dir, "pkg/shared/s.js", "module.exports = 1;\n");
+  commitAll(dir, "init");
+
+  const pkg = path.join(dir, "pkg", "a");
+  writeFile(dir, "pkg/a/f.js", "module.exports = 2;\n");
+  writeFile(dir, "pkg/shared/s.js", "module.exports = 2;\n");
+  await execute(pkg, [{ command: node + ' -e "process.exit(0)"', source: "cli" }]);
+
+  assert.equal(fs.existsSync(path.join(pkg, ".test-receipt", "latest.json")), true);
+  assert.equal(fs.existsSync(path.join(dir, ".test-receipt", "latest.json")), false);
+  assert.equal(evaluate(pkg).reason, "fresh");
+
+  writeFile(dir, "pkg/a/f.js", "module.exports = 3;\n");
+  assert.equal(evaluate(pkg).reason, "fingerprint-mismatch");
+
+  writeFile(dir, "pkg/a/f.js", "module.exports = 2;\n");
+  assert.equal(evaluate(pkg).reason, "fresh");
+  assert.equal(gitState(pkg).treeFingerprint, gitState(dir).treeFingerprint);
+
+  writeFile(dir, "pkg/shared/s.js", "module.exports = 3;\n");
+  assert.equal(evaluate(pkg).reason, "fingerprint-mismatch");
+});
+
+test("a .test-receipt directory anywhere in the repo is not fingerprinted", () => {
+  const dir = tempDir();
+  initRepo(dir);
+  writeFile(dir, "pkg/a/f.js", "module.exports = 1;\n");
+  commitAll(dir, "init");
+
+  const before = gitState(path.join(dir, "pkg", "a")).treeFingerprint;
+  writeFile(dir, "pkg/a/.test-receipt/extra.txt", "noise\n");
+  assert.equal(gitState(dir).treeFingerprint, before);
+  assert.equal(gitState(path.join(dir, "pkg", "a")).treeFingerprint, before);
+
+  writeFile(dir, "pkg/a/f.js", "module.exports = 2;\n");
+  assert.notEqual(gitState(dir).treeFingerprint, before);
+});
+
 test("a command that writes an unignored file still leaves a fresh receipt", async () => {
   const dir = tempDir();
   initRepo(dir);
