@@ -21,6 +21,7 @@ test("help and print-hook", () => {
   const help = run([]);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /test-receipt run/);
+  assert.match(help.stdout, /nearest receipt/);
 
   const claude = run(["print-hook", "claude"]);
   assert.equal(claude.status, 0);
@@ -71,6 +72,7 @@ test("run then check is fresh for a passing command", () => {
   commitAll(dir, "init");
   const ran = run(["run", "--cwd", dir, "--cmd", process.execPath + ' -e "process.exit(0)"']);
   assert.equal(ran.status, 0, ran.stderr);
+  assert.doesNotMatch(ran.stderr, /can never be fresh/);
   assert.match(ran.stdout, /ok: yes/);
   const check = run(["check", "--cwd", dir]);
   assert.equal(check.status, 0, check.stdout);
@@ -138,6 +140,21 @@ test("detect prints the command and why without running it", () => {
   assert.equal(empty.status, 0);
   assert.match(empty.stdout, /would run: \(none\)/);
   assert.match(empty.stderr, /no test command detected/);
+});
+
+test("run outside a git repo warns that the receipt can never be fresh", () => {
+  const dir = tempDir();
+  writeFile(dir, "app.js", "1\n");
+  const ran = run(["run", "--cwd", dir, "--cmd", process.execPath + ' -e "process.exit(0)"']);
+  assert.equal(ran.status, 0, ran.stderr);
+  const warnings = ran.stderr.split(/\n/).filter((line) => /can never be fresh/.test(line));
+  assert.deepEqual(warnings, ["warning: the receipt can never be fresh outside a git repository."]);
+});
+
+test("the published package includes CHANGELOG.md", () => {
+  const pkg = require("../package.json");
+  assert.ok(pkg.files.includes("CHANGELOG.md"));
+  assert.equal(pkg.version, "0.2.1");
 });
 
 test("invalid hook JSON fail-opens", () => {

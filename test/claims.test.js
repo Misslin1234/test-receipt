@@ -56,3 +56,28 @@ test("failures, refusals, and unrelated text are not pass claims", () => {
     assert.equal(claimsTestsPassed(text), false, JSON.stringify(text));
   }
 });
+
+test("a sentence with a pass word and a test word is a claim unless it is negated", () => {
+  const rows = [
+    ["I ran the tests and everything passes.", true],
+    ["Tests: 12 passed, 0 failed.", true],
+    ["pytest: 14 passed.", true],
+    ["Ran 5 tests, all passed.", true],
+    ["测试已经通过", true],
+    ["测试全绿", true],
+    ["All checks are green.", true],
+    ["cargo test passes.", true],
+    ["The test suite passes.", true],
+    ["I couldn't confirm that the tests pass.", false],
+    ["I haven't verified that the tests pass.", false],
+    ["Not all tests pass.", false],
+    ["No tests passed.", false],
+    ["Tests failed with exit code 1.", false],
+  ];
+  const misses = [];
+  for (const [text, expected] of rows) {
+    const got = claimsTestsPassed(text);
+    if (got !== expected) misses.push(JSON.stringify(text) + " => " + got);
+  }
+  assert.deepEqual(misses, []);
+});

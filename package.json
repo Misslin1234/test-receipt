@@ -1,6 +1,6 @@
 {
   "name": "test-receipt",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Run a project's tests and write a local receipt so a coding agent cannot claim tests passed without a fresh exit code 0.",
   "license": "MIT",
   "author": "Misslin1234",
@@ -22,6 +22,7 @@
     "lib",
     "skills",
     "examples",
-    "script"
+    "script",
+    "CHANGELOG.md"
   ]
 }

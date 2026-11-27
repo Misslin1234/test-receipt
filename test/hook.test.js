@@ -2,7 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { decide } = require("../lib/hook");
+const { evaluate } = require("../lib/receipt");
 const { execute } = require("../lib/run");
 const { commitAll, initRepo, tempDir, writeFile } = require("../support/helpers");
 
@@ -81,6 +84,47 @@ test("stop_hook_active flags a repeated false claim without blocking again", () 
   assert.equal(decision.output.decision, undefined);
   assert.match(decision.output.systemMessage, /stop_hook_active/);
   assert.match(decision.output.systemMessage, /no-receipt/);
+});
+
+test("a subdirectory stop uses the receipt at the git root", async () => {
+  const dir = await passingProject();
+  const sub = path.join(dir, "pkg", "a");
+  fs.mkdirSync(sub, { recursive: true });
+
+  assert.equal(evaluate(sub).reason, "fresh");
+  assert.equal(evaluate(sub).receiptPath, path.join(dir, ".test-receipt", "latest.json"));
+  assert.deepEqual(decide(stopInput(sub, "All tests pass.")).output, {});
+
+  writeFile(dir, "app.js", "module.exports = 2;\n");
+  const stale = decide(stopInput(sub, "All tests pass."));
+  assert.equal(stale.blocked, true);
+  assert.match(stale.output.reason, /mismatch/);
+  assert.doesNotMatch(stale.output.reason, /no-receipt/);
+});
+
+test("the nearest receipt wins when a parent also has one", async () => {
+  const dir = await passingProject();
+  const sub = path.join(dir, "pkg");
+  fs.mkdirSync(sub);
+  await execute(sub, [{ command: node + ' -e "process.exit(1)"', source: "cli" }]);
+  const deeper = path.join(sub, "src");
+  fs.mkdirSync(deeper);
+  const status = evaluate(deeper);
+  assert.equal(status.reason, "exit-nonzero");
+  assert.equal(status.receiptPath, path.join(sub, ".test-receipt", "latest.json"));
+});
+
+test("a receipt above the git root is not used", () => {
+  const outer = tempDir();
+  const dir = path.join(outer, "repo");
+  fs.mkdirSync(dir);
+  initRepo(dir);
+  writeFile(dir, "app.js", "1\n");
+  commitAll(dir, "init");
+  writeFile(outer, ".test-receipt/latest.json", "{}\n");
+  const sub = path.join(dir, "sub");
+  fs.mkdirSync(sub);
+  assert.equal(evaluate(sub).reason, "no-receipt");
 });
 
 test("a Cursor-shaped stop payload without the assistant message is allowed", () => {

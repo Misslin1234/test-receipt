@@ -30,7 +30,11 @@ print-hook
          Print a settings snippet. Cursor claim checking is not yet supported.
 
 A receipt is fresh only when exit code is 0, the git commit matches, and the
-dirty working tree (file contents included) matches. No network calls.
+dirty working tree (file contents included) matches. run writes
+.test-receipt/latest.json in the directory it runs in. check and hook use
+the nearest receipt, walking up from the working directory to the git root.
+The fingerprint covers the whole repository and is taken after the commands
+finish. No network calls.
 `;
 
 function parseArgs(argv) {
@@ -199,6 +203,9 @@ async function main(argv) {
       process.stderr.write("running: " + item.command + "\n");
     }
     const result = await execute(cwd, commands);
+    if (!result.git.inGit) {
+      process.stderr.write("warning: the receipt can never be fresh outside a git repository.\n");
+    }
     if (args.json) {
       process.stdout.write(JSON.stringify(result.receipt, null, 2) + "\n");
     } else {

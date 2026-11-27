@@ -104,7 +104,7 @@ node "$HOME/test-receipt/bin/cli.js" check
 {
   "schemaVersion": 1,
   "tool": "test-receipt",
-  "toolVersion": "0.2.0",
+  "toolVersion": "0.2.1",
   "ok": true,
   "exitCode": 0,
   "command": "npm test",
@@ -133,7 +133,9 @@ node "$HOME/test-receipt/bin/cli.js" check
 
 `command` 是展示用的字符串。真正的结果在 `commands` 数组里。多个命令都会跑，中间用 `"; "` 连起来，并不是 shell 的 `&&`（前面的失败不会取消后面的命令）。
 
-指纹在测试开始前计算。被 git 忽略的覆盖率文件不会让收据过期。`.test-receipt/` 自己也不算进指纹。
+指纹在测试命令结束之后计算。测试写出的、没有被 git 忽略的文件（例如 coverage.txt）算进这张收据。之后再改文件，收据就过期。被 git 忽略的文件不会让收据过期。仓库里任何位置的 `.test-receipt/` 都不算进指纹。
+
+`run` 把收据写在它运行的那个目录。`check` 和 Stop hook 从当前目录向上找，直到 git 仓库根目录，用最近的一份 `.test-receipt/latest.json`。仓库根目录之外的收据不算。
 
 ## 一句假话会被拦住
 
@@ -158,7 +160,9 @@ node "$HOME/test-receipt/bin/cli.js" check
 - `git.dirty` 和现在一致：有没有未提交的改动
 - `git.treeFingerprint` 一致，包括那些改动文件的内容
 
-不是 git 仓库时，收据可以写下来，但永远不算新鲜。
+不是 git 仓库时，收据可以写下来，但永远不算新鲜。这时 `run` 会在 stderr 打一行警告。
+
+`--cwd` 在子目录时，指纹仍覆盖整个 git 仓库，路径相对仓库根目录。子目录里的改动，以及子目录外面的共享代码，都会让收据过期。
 
 | `check` 的 reason | 含义 |
 | --- | --- |
@@ -220,7 +224,8 @@ Bun 和 npm / pnpm / yarn 二选一：
 
 ## 局限
 
-- Hook 是关键词匹配，不是语言模型。换一种说法可能漏过；引用「tests passed」这句话也可能被误拦。
+- Hook 按句子判断，不是语言模型。一句要同时有通过类的词和测试类的词，才算声称通过。通过类的词包括 pass、passed、passing、green、succeed、通过、全绿。测试类的词包括 test、suite、pytest、jest、vitest、cargo test、go test、checks、测试、用例。
+- 否定或不确定就不算，包括 not、no、couldn't、can't、haven't、didn't、unable、failed、未、没有、无法、不。“I couldn't confirm that the tests pass.”、“Not all tests pass.”、“No tests passed.” 和 “Tests failed with exit code 1.” 不会被拦。换一种说法仍可能漏过。引用「tests passed」也可能被拦。
 - Hook 不核对「测试失败了」或「测试没有运行」。这两句可以是假的。
 - 助手可以手写 `.test-receipt/latest.json` 来骗过 hook。技能禁止这样做。v1 没有签名，做不到真正防伪。
 - 只检测根目录。单体仓库里的子包不会单独识别。
@@ -316,7 +321,7 @@ node "$HOME/test-receipt/bin/cli.js" check
 {
   "schemaVersion": 1,
   "tool": "test-receipt",
-  "toolVersion": "0.2.0",
+  "toolVersion": "0.2.1",
   "ok": true,
   "exitCode": 0,
   "command": "npm test",
@@ -343,7 +348,9 @@ node "$HOME/test-receipt/bin/cli.js" check
 
 `commands` is authoritative. `command` is those commands joined with `"; "` for display. Every detected command runs, including after an earlier failure.
 
-The fingerprint is taken before the tests start. Gitignored artifacts do not stale the receipt. `.test-receipt/` is excluded from the fingerprint.
+The fingerprint is taken after the test commands finish. An un-ignored file a command writes, such as coverage.txt, is part of that receipt. A later edit makes the receipt stale. Gitignored files do not. Any `.test-receipt/` directory in the repository is excluded.
+
+`run` writes the receipt in the directory it runs in. `check` and the Stop hook walk up from the working directory to the git toplevel and use the nearest `.test-receipt/latest.json`. A receipt outside the repository does not count.
 
 ## A blocked false claim
 
@@ -359,7 +366,9 @@ When `stop_hook_active` is true, the hook does not block again. It emits a `syst
 
 ## Fresh
 
-`check` prints `fresh: yes` only when `ok` is true, `exitCode` is 0, `git.commit` matches `HEAD`, `git.dirty` matches, and `git.treeFingerprint` matches (dirty file contents included). A directory that is not a git repo is never fresh.
+`check` prints `fresh: yes` only when `ok` is true, `exitCode` is 0, `git.commit` matches `HEAD`, `git.dirty` matches, and `git.treeFingerprint` matches (dirty file contents included). A directory that is not a git repo is never fresh. `run` prints one warning on stderr in that case.
+
+With `--cwd` in a subdirectory, the fingerprint still covers the whole git repository, with paths relative to the toplevel. An edit in that subdirectory, and an edit to shared code outside it, both make the receipt stale.
 
 ## Detection
 
@@ -405,7 +414,8 @@ Override with `.test-receipt.json`:
 
 ## Limitations
 
-- Keyword match, not a model. Paraphrases can slip through, and a quoted “tests passed” can be flagged.
+- The hook judges each sentence by its words. A sentence is a pass claim when it has a pass word and a test word. Pass words include pass, passed, passing, green, succeed, 通过, and 全绿. Test words include test, suite, pytest, jest, vitest, cargo test, go test, checks, 测试, and 用例.
+- Negation or uncertainty keeps the sentence allowed. That includes not, no, couldn't, can't, haven't, didn't, unable, failed, 未, 没有, 无法, and 不. "I couldn't confirm that the tests pass.", "Not all tests pass.", "No tests passed.", and "Tests failed with exit code 1." are allowed. A paraphrase can still slip through, and a quoted "tests passed" can be flagged.
 - “Tests failed” and “tests were not run” are not checked.
 - A hand-written receipt fools the hook. The skill forbids that. v1 has no signature.
 - Root-only detection. The test command must exit. There is no timeout.
