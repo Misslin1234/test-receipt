@@ -111,6 +111,25 @@ test("outputTail keeps the end of long output", async () => {
   assert.ok(result.receipt.commands[0].outputTail.length <= TAIL_LIMIT);
 });
 
+test("a command that writes an unignored file still leaves a fresh receipt", async () => {
+  const dir = tempDir();
+  initRepo(dir);
+  writeFile(dir, ".gitignore", ".test-receipt/\n");
+  writeFile(dir, "app.js", "module.exports = 1;\n");
+  commitAll(dir, "init");
+
+  await execute(dir, [
+    {
+      command: node + " -e \"require('fs').writeFileSync('coverage.txt','cov')\"",
+      source: "cli",
+    },
+  ]);
+  assert.equal(evaluate(dir).reason, "fresh");
+
+  writeFile(dir, "app.js", "module.exports = 2;\n");
+  assert.equal(evaluate(dir).reason, "fingerprint-mismatch");
+});
+
 test("a new commit invalidates the receipt", async () => {
   const dir = tempDir();
   initRepo(dir);
