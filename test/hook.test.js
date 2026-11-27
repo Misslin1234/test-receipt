@@ -102,6 +102,18 @@ test("a subdirectory stop uses the receipt at the git root", async () => {
   assert.doesNotMatch(stale.output.reason, /no-receipt/);
 });
 
+test("the nearest receipt wins when a parent also has one", async () => {
+  const dir = await passingProject();
+  const sub = path.join(dir, "pkg");
+  fs.mkdirSync(sub);
+  await execute(sub, [{ command: node + ' -e "process.exit(1)"', source: "cli" }]);
+  const deeper = path.join(sub, "src");
+  fs.mkdirSync(deeper);
+  const status = evaluate(deeper);
+  assert.equal(status.reason, "exit-nonzero");
+  assert.equal(status.receiptPath, path.join(sub, ".test-receipt", "latest.json"));
+});
+
 test("a receipt above the git root is not used", () => {
   const outer = tempDir();
   const dir = path.join(outer, "repo");
