@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js 18+ and git on PATH. No network calls. The Stop hook is verified for Claude Code, Codex, and Qoder. Cursor claim checking is not yet supported."
 metadata:
   author: Misslin1234
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Test receipt
@@ -24,7 +24,7 @@ Use the first one that exists:
 
 If you cannot find it, say that tests were not run. Do not claim they passed.
 
-Run it from the project root (the directory that contains `package.json`, `go.mod`, `Cargo.toml`, `pytest` config, or the `Makefile`). Pass `--cwd` when the shell is somewhere else. v1 only detects the root.
+Run it from the project root. Pass `--cwd` when the shell is somewhere else. Detection only looks at the root. Run `test-receipt detect` to see which command would run and why. That command does not run the tests and does not write a receipt.
 
 ## Rules
 

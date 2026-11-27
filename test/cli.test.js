@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 const { commitAll, initRepo, tempDir, writeFile } = require("../support/helpers");
 
@@ -86,6 +87,57 @@ test("run then check is fresh for a passing command", () => {
   });
   assert.equal(hook.status, 0, hook.stdout);
   assert.equal(hook.stdout.trim(), "{}");
+});
+
+test("detect prints the command and why without running it", () => {
+  const dir = tempDir();
+  writeFile(
+    dir,
+    "package.json",
+    JSON.stringify({
+      scripts: {
+        test: "node -e \"require('fs').writeFileSync('ran.txt','1'); process.exit(1)\"",
+      },
+    })
+  );
+  writeFile(dir, "package-lock.json", "{}\n");
+  writeFile(dir, "pom.xml", "<project></project>\n");
+  writeFile(dir, "mvnw", "#!/bin/sh\n");
+
+  const human = run(["detect", "--cwd", dir]);
+  assert.equal(human.status, 0, human.stderr);
+  assert.equal(human.stderr, "");
+  assert.match(human.stdout, /detection: detect/);
+  assert.match(human.stdout, /would run: npm test/);
+  assert.match(human.stdout, /why: package.json scripts.test and package-lock.json/);
+  assert.match(human.stdout, /would run: \.\/mvnw test/);
+  assert.match(human.stdout, /why: pom.xml and mvnw/);
+  assert.equal(fs.existsSync(path.join(dir, "ran.txt")), false);
+
+  const json = run(["detect", "--cwd", dir, "--json"]);
+  assert.equal(json.status, 0, json.stderr);
+  const parsed = JSON.parse(json.stdout);
+  assert.equal(parsed.source, "detect");
+  assert.deepEqual(
+    parsed.commands.map((item) => item.command),
+    ["npm test", "./mvnw test"]
+  );
+  assert.equal(parsed.commands[0].reason, "package.json scripts.test and package-lock.json");
+  assert.equal(parsed.commands[1].reason, "pom.xml and mvnw");
+  assert.equal(fs.existsSync(path.join(dir, "ran.txt")), false);
+
+  const ruby = tempDir();
+  writeFile(ruby, "Gemfile", "source 'https://rubygems.org'\n");
+  writeFile(ruby, "spec/example_spec.rb", "\n");
+  const rubyOut = run(["detect", "--cwd", ruby]);
+  assert.equal(rubyOut.status, 0, rubyOut.stderr);
+  assert.match(rubyOut.stdout, /would run: bundle exec rspec/);
+  assert.match(rubyOut.stdout, /why: Gemfile and spec\//);
+
+  const empty = run(["detect", "--cwd", tempDir()]);
+  assert.equal(empty.status, 0);
+  assert.match(empty.stdout, /would run: \(none\)/);
+  assert.match(empty.stderr, /no test command detected/);
 });
 
 test("invalid hook JSON fail-opens", () => {
