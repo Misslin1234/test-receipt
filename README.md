@@ -104,7 +104,7 @@ node "$HOME/test-receipt/bin/cli.js" check
 {
   "schemaVersion": 1,
   "tool": "test-receipt",
-  "toolVersion": "0.1.0",
+  "toolVersion": "0.2.0",
   "ok": true,
   "exitCode": 0,
   "command": "npm test",
@@ -174,17 +174,41 @@ node "$HOME/test-receipt/bin/cli.js" check
 
 ## 能认出哪些测试命令
 
-只看项目根目录，按这个顺序，有几个算几个：
+只看项目根目录。下表里对得上的都会加入列表，顺序固定。想先看会跑哪条命令、为什么，而不真正执行：
 
-| 看到什么 | 运行 |
-| --- | --- |
-| `package.json` 里有真正的 `scripts.test` | `pnpm test`、`yarn test` 或 `npm test`。有 `pnpm-lock.yaml` 用 pnpm，有 `yarn.lock` 用 yarn，有 `package-lock.json` 或 `npm-shrinkwrap.json` 用 npm。都没有时看 `packageManager` 字段，再没有就用 npm |
-| `pytest.ini`、`pyproject.toml` 里的 `[tool.pytest`、`setup.cfg` / `tox.ini` 的 pytest 段，或 `test_*.py` / `*_test.py` / `conftest.py` | `pytest` |
-| `go.mod` | `go test ./...` |
-| `Cargo.toml` | `cargo test` |
-| `Makefile`、`makefile` 或 `GNUmakefile` 里行首的 `test:` | `make test` |
+```bash
+node "$HOME/test-receipt/bin/cli.js" detect
+```
 
-`npm init` 自带的 `echo "Error: no test specified" && exit 1` 会忽略。缩进在配方里的 `test:` 不算 make 目标。
+默认打出人能读的几行：`would run`、`source`、`why`。加 `--json` 则打出 JSON，每条命令带 `reason`。找不到命令时退出码仍是 0，说明写在 stderr。这个命令不会运行测试，也不会写收据。
+
+JavaScript 那一行和 Bun 那一行不会同时出现，见表格下面的规则。其余行只要文件在，就会各加一条。Ruby 的两行可以同时出现，`rspec` 在前。
+
+| 顺序 | 看到什么 | 运行 | JSON 里的 source |
+| --- | --- | --- | --- |
+| 1 | `package.json` 里有真正的 `scripts.test`，并且没有被 Bun 规则抢走 | `pnpm test`、`yarn test` 或 `npm test`。锁文件优先级是 `pnpm-lock.yaml`，然后 `yarn.lock`，然后 `package-lock.json`，然后 `npm-shrinkwrap.json`。都没有时看 `packageManager`，再没有就用 npm | `pnpm`、`yarn` 或 `npm` |
+| 1 | `bun.lockb` 或 `bun.lock`（`bun.lockb` 优先写进 why） | `bun test` | `bun` |
+| 2 | `deno.json`，否则 `deno.jsonc` | `deno test` | `deno` |
+| 3 | `pytest.ini`、`pyproject.toml` 里的 `[tool.pytest`、`setup.cfg` / `tox.ini` 的 pytest 段，或 `test_*.py` / `*_test.py` / `conftest.py` | `pytest` | `pytest` |
+| 4 | `go.mod` | `go test ./...` | `go` |
+| 5 | `Cargo.toml` | `cargo test` | `cargo` |
+| 6 | `Makefile`、`makefile` 或 `GNUmakefile` 里行首的 `test:` | `make test` | `make` |
+| 7 | `pom.xml`。旁边有文件 `mvnw` 时用包装器 | `./mvnw test`，否则 `mvn test` | `maven` |
+| 8 | `build.gradle` 或 `build.gradle.kts`。旁边有文件 `gradlew` 时用包装器 | `./gradlew test`，否则 `gradle test` | `gradle` |
+| 9 | 根目录的 `*.sln`，没有解决方案时才看 `*.csproj` | `dotnet test` | `dotnet` |
+| 10 | `Gemfile`，并且 `spec/` 是目录 | `bundle exec rspec` | `rspec` |
+| 11 | `Gemfile`，并且有文件 `Rakefile` | `bundle exec rake test` | `rake` |
+| 12 | `phpunit.xml`，否则 `phpunit.xml.dist` | `vendor/bin/phpunit` | `phpunit` |
+
+Bun 和 npm / pnpm / yarn 二选一：
+
+- 有真正的 `scripts.test`，同时又有 `pnpm-lock.yaml`、`yarn.lock`、`package-lock.json`、`npm-shrinkwrap.json` 其中之一：用对应的包管理器，即使旁边还有 `bun.lock` 或 `bun.lockb`。这是 0.1.0 的选法，Bun 不会再插一条。
+- 有 Bun 的锁文件，但没有上面这些 Node 锁文件：用 `bun test`。这时即使 `package.json` 写了 `scripts.test`，或者 `packageManager` 写了 pnpm / yarn / npm，也不跑 `npm test`。
+- 没有 Bun 锁文件：和 0.1.0 一样。占位脚本 `echo "Error: no test specified" && exit 1` 仍会忽略。没有锁文件时看 `packageManager`，再没有就用 `npm test`。`packageManager` 写成 `bun@…` 但没有 Bun 锁文件时，也仍是 `npm test`，因为 Bun 只认 `bun.lockb` / `bun.lock`。
+
+只写了 `Gemfile`、只写了 `spec/`、或只写了 `Rakefile`，都不会当成 Ruby。`mvnw` 和 `gradlew` 必须是文件；只有包装器、没有 `pom.xml` 或 Gradle 构建文件，不会选中。`mvnw.cmd` 和 `gradlew.bat` 单独出现时，仍用 `mvn test` / `gradle test`。同一个目录里有好几个 `.sln` 或 `.csproj` 时，命令只加一次，why 里写按文件名排序后的第一个。子目录里的标记文件不算。缩进在配方里的 `test:` 不算 make 目标。
+
+`why` 会写出决定性的文件名，例如 `package.json scripts.test and package-lock.json`、`pom.xml and mvnw`、`Gemfile and spec/`。
 
 命令不对时，在项目根目录写 `.test-receipt.json`，它会代替自动检测：
 
@@ -213,7 +237,6 @@ node "$HOME/test-receipt/bin/cli.js" check
 - Cursor：等官方 `stop` 事件带上助手的最后一句话再接。仍然不解析聊天记录。
 - 可选的收据签名，让手写 JSON 更难蒙混。签名也挡不住能读到密钥的助手，所以这不是完全的防伪。
 - 只跑和本次改动相关的测试。
-- 更多根目录就能看懂的测试命令，例如 `dotnet test`。
 - 给 `run` 加一个超时。
 
 ## 开发和示例
@@ -221,9 +244,10 @@ node "$HOME/test-receipt/bin/cli.js" check
 ```bash
 npm test
 bash script/demo.sh
+node bin/cli.js detect
 ```
 
-`npm test` 就是 `node --test`，测试这个工具自己。`script/demo.sh` 把 `examples/mini` 拷到临时目录：没有收据时拦住中英文的「通过」，跑完 `npm test` 后放行，改文件后因为过期再拦住，把断言改坏后再拦住「All tests pass」，并放行「Tests failed...」。脚本自己检查这些结果，不对就退出码非 0。
+`npm test` 就是 `node --test`，测试这个工具自己。`script/demo.sh` 把 `examples/mini` 拷到临时目录：没有收据时拦住中英文的「通过」，跑完 `npm test` 后放行，改文件后因为过期再拦住，把断言改坏后再拦住「All tests pass」，并放行「Tests failed...」。脚本自己检查这些结果，不对就退出码非 0。`detect` 只打印会跑的命令和原因。
 
 许可证是 MIT，版权 Misslin1234。
 
@@ -292,7 +316,7 @@ node "$HOME/test-receipt/bin/cli.js" check
 {
   "schemaVersion": 1,
   "tool": "test-receipt",
-  "toolVersion": "0.1.0",
+  "toolVersion": "0.2.0",
   "ok": true,
   "exitCode": 0,
   "command": "npm test",
@@ -339,7 +363,39 @@ When `stop_hook_active` is true, the hook does not block again. It emits a `syst
 
 ## Detection
 
-Root only, all matches run, in this order: package-manager `test` (pnpm, then yarn, then npm lockfiles, then the `packageManager` field, otherwise npm), `pytest`, `go test ./...`, `cargo test`, `make test`. The default npm placeholder `echo "Error: no test specified" && exit 1` is ignored. An indented `test:` inside a recipe is not a Make target.
+Root only. Every matching row is kept, in this order. JavaScript and Bun are alternatives, so only one of those two commands is added. Ruby can add both rows, rspec first.
+
+```bash
+node bin/cli.js detect
+```
+
+The default output is `would run`, `source`, and `why`. `--json` prints the same result, and each command includes `reason`. Exit code is 0 even when nothing matches; the hint goes to stderr. `detect` does not run tests and does not write a receipt.
+
+| Order | Marker | Command | `source` |
+| --- | --- | --- | --- |
+| 1 | Real `package.json` `scripts.test`, unless Bun wins (below) | `pnpm test`, `yarn test`, or `npm test`. Lockfile order: `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `npm-shrinkwrap.json`, then `packageManager`, otherwise npm | `pnpm`, `yarn`, or `npm` |
+| 1 | `bun.lockb` or `bun.lock` (`bun.lockb` is cited first) | `bun test` | `bun` |
+| 2 | `deno.json`, otherwise `deno.jsonc` | `deno test` | `deno` |
+| 3 | `pytest.ini`, `[tool.pytest` in `pyproject.toml`, a pytest section in `setup.cfg` / `tox.ini`, or `test_*.py` / `*_test.py` / `conftest.py` | `pytest` | `pytest` |
+| 4 | `go.mod` | `go test ./...` | `go` |
+| 5 | `Cargo.toml` | `cargo test` | `cargo` |
+| 6 | A top-level `test:` in `Makefile`, `makefile`, or `GNUmakefile` | `make test` | `make` |
+| 7 | `pom.xml`. A `mvnw` file selects the wrapper | `./mvnw test`, otherwise `mvn test` | `maven` |
+| 8 | `build.gradle` or `build.gradle.kts`. A `gradlew` file selects the wrapper | `./gradlew test`, otherwise `gradle test` | `gradle` |
+| 9 | A root `*.sln`, or a root `*.csproj` when there is no solution | `dotnet test` | `dotnet` |
+| 10 | `Gemfile` and a `spec/` directory | `bundle exec rspec` | `rspec` |
+| 11 | `Gemfile` and a `Rakefile` file | `bundle exec rake test` | `rake` |
+| 12 | `phpunit.xml`, otherwise `phpunit.xml.dist` | `vendor/bin/phpunit` | `phpunit` |
+
+Bun versus npm, pnpm, and yarn:
+
+- A real `scripts.test` plus `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, or `npm-shrinkwrap.json` selects that package manager. A Bun lockfile beside it does not add `bun test`. This is the 0.1.0 choice.
+- A Bun lockfile and none of those Node lockfiles selects `bun test`, even when `scripts.test` or `packageManager` names npm, pnpm, or yarn.
+- With no Bun lockfile, detection matches 0.1.0. The placeholder `echo "Error: no test specified" && exit 1` is ignored. An indented `test:` inside a recipe is not a Make target. `packageManager` set to `bun@…` without a Bun lockfile is still `npm test`: Bun is recognized only from `bun.lockb` or `bun.lock`.
+
+`Gemfile` alone, `spec/` alone, or `Rakefile` alone is not Ruby. `mvnw` and `gradlew` must be files. `mvnw.cmd` or `gradlew.bat` alone does not change `mvn test` / `gradle test`. Several `.sln` or `.csproj` files add `dotnet test` once; `why` names the first filename in sorted order. `build.gradle` is cited before `build.gradle.kts`. Markers in subdirectories do not count.
+
+`why` names the deciding file, for example `package.json scripts.test and package-lock.json`, `pom.xml and mvnw`, or `Gemfile and spec/`.
 
 Override with `.test-receipt.json`:
 
@@ -362,15 +418,17 @@ Override with `.test-receipt.json`:
 
 - Cursor, when the documented `stop` payload includes the assistant message. Still no transcript parsing.
 - Optional signing. An agent that can read the key can still forge a receipt.
-- Test selection based on the diff, more root-level runners, and a timeout for `run`.
+- Test selection based on the diff.
+- A timeout for `run`.
 
 ## Develop
 
 ```bash
 npm test
 bash script/demo.sh
+node bin/cli.js detect
 ```
 
-`script/demo.sh` copies `examples/mini` to a temp git repo and checks four outcomes: a missing receipt blocks English and Chinese pass claims, a fresh receipt allows the claim, an edit blocks it again, and a failing test blocks “All tests pass” while allowing “Tests failed...”. The script exits non-zero if any of those checks is wrong.
+`script/demo.sh` copies `examples/mini` to a temp git repo and checks four outcomes: a missing receipt blocks English and Chinese pass claims, a fresh receipt allows the claim, an edit blocks it again, and a failing test blocks “All tests pass” while allowing “Tests failed...”. The script exits non-zero if any of those checks is wrong. `detect` only prints the command and the reason.
 
 MIT License. Copyright Misslin1234.

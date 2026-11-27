@@ -19,7 +19,8 @@ Usage:
   test-receipt hook
   test-receipt print-hook claude|codex|qoder|cursor
 
-detect   Print the test commands found at the project root.
+detect   Print which test commands would run, and why. Does not run them.
+         --json prints the same result as JSON. Each command includes reason.
 run      Run those commands and write .test-receipt/latest.json.
 check    Exit 0 only when a fresh passing receipt matches this commit and tree.
          With --message, exit 0 when that text does not claim tests passed,
@@ -71,6 +72,21 @@ function printCheck(status, message) {
     receiptPath: status.receiptPath,
     receipt: status.receipt,
   };
+}
+
+function formatDetect(found) {
+  const lines = ["detection: " + found.source];
+  if (found.commands.length === 0) {
+    lines.push("would run: (none)");
+    return lines.join("\n") + "\n";
+  }
+  for (const item of found.commands) {
+    lines.push("");
+    lines.push("would run: " + item.command);
+    lines.push("source: " + item.source);
+    lines.push("why: " + item.reason);
+  }
+  return lines.join("\n") + "\n";
 }
 
 function printHumanCheck(report) {
@@ -161,7 +177,7 @@ async function main(argv) {
 
   if (command === "detect") {
     const found = detect(cwd);
-    process.stdout.write(JSON.stringify(found) + "\n");
+    process.stdout.write(args.json ? JSON.stringify(found, null, 2) + "\n" : formatDetect(found));
     if (found.commands.length === 0) {
       process.stderr.write(
         "no test command detected. Add a real test script, or create .test-receipt.json with a commands array.\n"

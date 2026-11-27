@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-11-27
+
+- Detect Bun, Deno, Maven, Gradle, .NET, Ruby, and PHPUnit from marker files in the project root. Existing npm, pnpm, yarn, pytest, Go, Cargo, and Make detection is unchanged.
+- `package.json` `scripts.test` still wins over `bun test` when an npm, pnpm, or yarn lockfile is present. A Bun lockfile with none of those lockfiles selects `bun test` instead, even if `scripts.test` or `packageManager` is set.
+- `test-receipt detect` prints the command that would run and why, and does not run it. `--json` prints the same result, including a `reason` on each command.
+- GitHub Actions runs `npm test` and `bash script/demo.sh` on Node 18 and 20.
+
 ## 0.1.0 - 2026-11-27
 
 First release.
